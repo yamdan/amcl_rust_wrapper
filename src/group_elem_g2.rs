@@ -12,8 +12,12 @@ use std::hash::{Hash, Hasher};
 use std::slice::Iter;
 
 use crate::group_elem_g1::parse_hex_as_FP;
+
+#[cfg(feature="rayon")]
 use crate::rayon::iter::IntoParallelRefMutIterator;
+#[cfg(feature="rayon")]
 use rayon::prelude::*;
+
 use serde::de::{Deserialize, Deserializer, Error as DError, Visitor};
 use serde::ser::{Error as SError, Serialize, Serializer};
 use std::str::SplitWhitespace;

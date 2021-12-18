@@ -10,8 +10,11 @@ use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::slice::Iter;
 
+#[cfg(feature="rayon")]
 use crate::rayon::iter::IntoParallelRefMutIterator;
+#[cfg(feature="rayon")]
 use rayon::prelude::*;
+
 use serde::de::{Deserialize, Deserializer, Error as DError, Visitor};
 use serde::ser::{Error as SError, Serialize, Serializer};
 use std::str::{FromStr, SplitWhitespace};

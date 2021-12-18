@@ -25,6 +25,7 @@ extern crate serde_derive;
 
 extern crate serde_json;
 
+#[cfg(feature="rayon")]
 extern crate rayon;
 
 extern crate subtle_encoding;
