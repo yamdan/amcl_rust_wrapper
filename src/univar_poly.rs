@@ -1,8 +1,11 @@
 use std::ops::{Add, Index, IndexMut, Mul, Sub};
 
 use crate::field_elem::{FieldElement, FieldElementVector};
-use crate::rayon::iter::IntoParallelRefIterator;
 use core::cmp::max;
+
+#[cfg(feature = "rayon")]
+use crate::rayon::iter::IntoParallelRefIterator;
+#[cfg(feature = "rayon")]
 use rayon::prelude::*;
 
 /// Univariate polynomial represented with coefficients in a vector. The ith element of the vector is the coefficient of the ith degree term.
@@ -30,6 +33,7 @@ impl UnivarPolynomial {
 
     /// Create a polynomial with given roots in `roots`
     /// i.e. (x-roots[0])*(x-roots[1])*(x-roots[2])...(x-roots[last]) given `roots`
+    #[cfg(feature = "rayon")]
     pub fn new_with_roots(roots: &[FieldElement]) -> Self {
         // vector of [(x-roots[0]), (x-roots[1]), (x-roots[2]), ...]
         let x_i = roots
@@ -47,6 +51,27 @@ impl UnivarPolynomial {
             || Self::new_constant(FieldElement::one()),
             |a, b| UnivarPolynomial::multiply(&a, &b),
         )
+    }
+
+    #[cfg(not(feature = "rayon"))]
+    pub fn new_with_roots(roots: &[FieldElement]) -> Self {
+        // vector of [(x-roots[0]), (x-roots[1]), (x-roots[2]), ...]
+        let x_i = roots
+            .iter()
+            .map(|i| {
+                let mut v = FieldElementVector::with_capacity(2);
+                v.push(-i);
+                v.push(FieldElement::one());
+                UnivarPolynomial(v)
+            })
+            .collect::<Vec<UnivarPolynomial>>();
+
+        // Polynomial (x-roots[0])*(x-roots[1])*(x-roots[2])...(x-roots[last])
+        x_i.iter()
+            .cloned()
+            .fold(Self::new_constant(FieldElement::one()), |a, b| {
+                UnivarPolynomial::multiply(&a, &b)
+            })
     }
 
     pub fn coefficients(&self) -> &FieldElementVector {
@@ -136,6 +161,7 @@ impl UnivarPolynomial {
     }
 
     /// Return sum of 2 polynomials. `left` + `right`
+    #[cfg(feature = "rayon")]
     pub fn sum(left: &Self, right: &Self) -> Self {
         // The resulting sum polynomial is initialized with the input polynomial of larger degree
         let (mut sum_poly, smaller_poly, smaller_poly_degree) = if left.degree() > right.degree() {
@@ -150,6 +176,28 @@ impl UnivarPolynomial {
         // Add small degree ([0, smaller_poly_degree]) terms in parallel
         let small_degree_terms = (0..=smaller_poly_degree)
             .into_par_iter()
+            .map(|i| &sum_poly[i] + &smaller_poly[i])
+            .collect::<Vec<FieldElement>>();
+        // Replace small degree ([0, smaller_poly_degree]) terms in the sum_poly
+        sum_poly.replace_small_degree_terms(smaller_poly_degree, small_degree_terms.into_iter());
+        sum_poly
+    }
+
+    #[cfg(not(feature = "rayon"))]
+    pub fn sum(left: &Self, right: &Self) -> Self {
+        // The resulting sum polynomial is initialized with the input polynomial of larger degree
+        let (mut sum_poly, smaller_poly, smaller_poly_degree) = if left.degree() > right.degree() {
+            (left.clone(), right, right.degree())
+        } else {
+            (right.clone(), left, left.degree())
+        };
+
+        // The following unobvious code is to use rayon for parallelization. A simpler (non-parallel)
+        // version would be  `for i in 0..=smaller_poly_degree { sum_poly[i] += &smaller_poly[i]; }`
+
+        // Add small degree ([0, smaller_poly_degree]) terms in parallel
+        let small_degree_terms = (0..=smaller_poly_degree)
+            .into_iter()
             .map(|i| &sum_poly[i] + &smaller_poly[i])
             .collect::<Vec<FieldElement>>();
         // Replace small degree ([0, smaller_poly_degree]) terms in the sum_poly

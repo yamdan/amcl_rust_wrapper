@@ -3,7 +3,9 @@ use rand::{CryptoRng, RngCore};
 use crate::errors::{SerzDeserzError, ValueError};
 use crate::field_elem::{FieldElement, FieldElementVector};
 
+#[cfg(feature = "rayon")]
 use rayon::prelude::*;
+
 use std::slice::Iter;
 
 #[macro_export]
@@ -608,10 +610,21 @@ pub trait GroupElementVector<T>: Sized {
 macro_rules! impl_group_elem_vec_ops {
     ( $group_element:ident, $group_element_vec:ident ) => {
         impl GroupElementVector<$group_element> for $group_element_vec {
+            #[cfg(feature = "rayon")]
             fn new(size: usize) -> Self {
                 Self {
                     elems: (0..size)
                         .into_par_iter()
+                        .map(|_| $group_element::new())
+                        .collect(),
+                }
+            }
+
+            #[cfg(not(feature = "rayon"))]
+            fn new(size: usize) -> Self {
+                Self {
+                    elems: (0..size)
+                        .into_iter()
                         .map(|_| $group_element::new())
                         .collect(),
                 }
@@ -655,11 +668,20 @@ macro_rules! impl_group_elem_vec_ops {
                 self.elems.remove(index)
             }
 
+            #[cfg(feature = "rayon")]
             fn sum(&self) -> $group_element {
                 self.as_slice()
                     .par_iter()
                     .cloned()
                     .reduce(|| $group_element::new(), |a, b| a + b)
+            }
+
+            #[cfg(not(feature = "rayon"))]
+            fn sum(&self) -> $group_element {
+                self.as_slice()
+                    .iter()
+                    .cloned()
+                    .fold($group_element::new(), |a, b| a + b)
             }
 
             fn scale(&mut self, n: &FieldElement) {
@@ -680,6 +702,7 @@ macro_rules! impl_group_elem_vec_ops {
                 scaled.into()
             }
 
+            #[cfg(feature = "rayon")]
             fn plus(&self, b: &Self) -> Result<Self, ValueError> {
                 check_vector_size_for_equality!(self, b)?;
                 let mut sum_vector = Self::new(self.len());
@@ -691,6 +714,19 @@ macro_rules! impl_group_elem_vec_ops {
                 Ok(sum_vector)
             }
 
+            #[cfg(not(feature = "rayon"))]
+            fn plus(&self, b: &Self) -> Result<Self, ValueError> {
+                check_vector_size_for_equality!(self, b)?;
+                let mut sum_vector = Self::new(self.len());
+                sum_vector
+                    .as_mut_slice()
+                    .iter_mut()
+                    .enumerate()
+                    .for_each(|(i, e)| *e = &self[i] + &b[i]);
+                Ok(sum_vector)
+            }
+
+            #[cfg(feature = "rayon")]
             fn minus(&self, b: &Self) -> Result<Self, ValueError> {
                 check_vector_size_for_equality!(self, b)?;
                 let mut diff_vector = Self::new(self.len());
@@ -702,13 +738,35 @@ macro_rules! impl_group_elem_vec_ops {
                 Ok(diff_vector)
             }
 
+            #[cfg(not(feature = "rayon"))]
+            fn minus(&self, b: &Self) -> Result<Self, ValueError> {
+                check_vector_size_for_equality!(self, b)?;
+                let mut diff_vector = Self::new(self.len());
+                diff_vector
+                    .as_mut_slice()
+                    .iter_mut()
+                    .enumerate()
+                    .for_each(|(i, e)| *e = &self[i] - &b[i]);
+                Ok(diff_vector)
+            }
+
             fn iter(&self) -> Iter<$group_element> {
                 self.as_slice().iter()
             }
 
+            #[cfg(feature = "rayon")]
             fn random(size: usize) -> Self {
                 (0..size)
                     .into_par_iter()
+                    .map(|_| $group_element::random())
+                    .collect::<Vec<$group_element>>()
+                    .into()
+            }
+
+            #[cfg(not(feature = "rayon"))]
+            fn random(size: usize) -> Self {
+                (0..size)
+                    .into_iter()
                     .map(|_| $group_element::random())
                     .collect::<Vec<$group_element>>()
                     .into()
@@ -747,10 +805,21 @@ macro_rules! impl_group_elem_vec_product_ops {
             /// Calculates Hadamard product of 2 group element vectors.
             /// Hadamard product of `a` and `b` = `a` o `b` = (a0 o b0, a1 o b1, ...).
             /// Here `o` denotes group operation, which in elliptic curve is point addition
+            #[cfg(feature="rayon")]
             pub fn hadamard_product(&self, b: &Self) -> Result<Self, ValueError> {
                 check_vector_size_for_equality!(self, b)?;
                 let mut hadamard_product = Self::new(self.len());
                 hadamard_product.as_mut_slice().par_iter_mut().enumerate().for_each(|(i, e)| {
+                    *e = &self[i] + &b[i]
+                });
+                Ok(hadamard_product)
+            }
+
+            #[cfg(not(feature="rayon"))]
+            pub fn hadamard_product(&self, b: &Self) -> Result<Self, ValueError> {
+                check_vector_size_for_equality!(self, b)?;
+                let mut hadamard_product = Self::new(self.len());
+                hadamard_product.as_mut_slice().iter_mut().enumerate().for_each(|(i, e)| {
                     *e = &self[i] + &b[i]
                 });
                 Ok(hadamard_product)
@@ -910,9 +979,19 @@ macro_rules! impl_group_elem_vec_product_ops {
 
             /// Non-constant time operation. Scale this group element vector by a factor. Each group
             /// element is multiplied by the same factor so wnaf is computed only once.
+            #[cfg(feature="rayon")]
             pub fn scale_var_time(&mut self, n: &FieldElement) {
                 let wnaf = n.to_wnaf(5);
                 self.elems.as_mut_slice().par_iter_mut().for_each(|e| {
+                    let table = $lookup_table::from(&(*e));
+                    *e = $group_element::wnaf_mul(&table, &wnaf);
+                })
+            }
+
+            #[cfg(not(feature="rayon"))]
+            pub fn scale_var_time(&mut self, n: &FieldElement) {
+                let wnaf = n.to_wnaf(5);
+                self.elems.as_mut_slice().iter_mut().for_each(|e| {
                     let table = $lookup_table::from(&(*e));
                     *e = $group_element::wnaf_mul(&table, &wnaf);
                 })

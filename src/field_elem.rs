@@ -16,8 +16,11 @@ use std::slice::Iter;
 use serde::de::{Deserialize, Deserializer, Error as DError, Visitor};
 use serde::ser::{Error as SError, Serialize, Serializer};
 
+#[cfg(feature = "rayon")]
 use crate::rayon::iter::IntoParallelRefMutIterator;
+#[cfg(feature = "rayon")]
 use rayon::prelude::*;
+
 use zeroize::Zeroize;
 
 /// Don't derive Copy trait as it can hold secret data and should not be accidentally copied
@@ -757,12 +760,20 @@ impl FieldElementVector {
     /// Creates a new field element vector with each element being 0
     // FIXME: size should have a type like u64 since usize can be small on older/smaller machines. This code
     // is less likely to be used on older/smaller machines though
+    #[cfg(feature = "rayon")]
     pub fn new(size: usize) -> Self {
         Self {
             elems: (0..size)
                 .into_par_iter()
                 .map(|_| FieldElement::new())
                 .collect(),
+        }
+    }
+
+    #[cfg(not(feature = "rayon"))]
+    pub fn new(size: usize) -> Self {
+        Self {
+            elems: (0..size).into_iter().map(|_| FieldElement::new()).collect(),
         }
     }
 
@@ -793,9 +804,19 @@ impl FieldElementVector {
     }
 
     /// Get a vector of random field elements
+    #[cfg(feature = "rayon")]
     pub fn random(size: usize) -> Self {
         (0..size)
             .into_par_iter()
+            .map(|_| FieldElement::random())
+            .collect::<Vec<FieldElement>>()
+            .into()
+    }
+
+    #[cfg(not(feature = "rayon"))]
+    pub fn random(size: usize) -> Self {
+        (0..size)
+            .into_iter()
             .map(|_| FieldElement::random())
             .collect::<Vec<FieldElement>>()
             .into()
@@ -835,8 +856,16 @@ impl FieldElementVector {
 
     /// Multiply each element of the vector with a given field
     /// element `n` (scale the vector). Modifies the vector.
+    #[cfg(feature = "rayon")]
     pub fn scale(&mut self, n: &FieldElement) {
         self.elems.as_mut_slice().par_iter_mut().for_each(|e| {
+            *e = e.multiply(n);
+        })
+    }
+
+    #[cfg(not(feature = "rayon"))]
+    pub fn scale(&mut self, n: &FieldElement) {
+        self.elems.as_mut_slice().iter_mut().for_each(|e| {
             *e = e.multiply(n);
         })
     }
@@ -850,6 +879,7 @@ impl FieldElementVector {
     }
 
     /// Add 2 vectors of field elements
+    #[cfg(feature = "rayon")]
     pub fn plus(&self, b: &FieldElementVector) -> Result<FieldElementVector, ValueError> {
         check_vector_size_for_equality!(self, b)?;
         let mut sum_vector = Self::new(self.len());
@@ -861,7 +891,20 @@ impl FieldElementVector {
         Ok(sum_vector)
     }
 
+    #[cfg(not(feature = "rayon"))]
+    pub fn plus(&self, b: &FieldElementVector) -> Result<FieldElementVector, ValueError> {
+        check_vector_size_for_equality!(self, b)?;
+        let mut sum_vector = Self::new(self.len());
+        sum_vector
+            .as_mut_slice()
+            .iter_mut()
+            .enumerate()
+            .for_each(|(i, e)| *e = &self[i] + &b[i]);
+        Ok(sum_vector)
+    }
+
     /// Subtract 2 vectors of field elements
+    #[cfg(feature = "rayon")]
     pub fn minus(&self, b: &FieldElementVector) -> Result<FieldElementVector, ValueError> {
         check_vector_size_for_equality!(self, b)?;
         let mut diff_vector = Self::new(self.len());
@@ -873,7 +916,20 @@ impl FieldElementVector {
         Ok(diff_vector)
     }
 
+    #[cfg(not(feature = "rayon"))]
+    pub fn minus(&self, b: &FieldElementVector) -> Result<FieldElementVector, ValueError> {
+        check_vector_size_for_equality!(self, b)?;
+        let mut diff_vector = Self::new(self.len());
+        diff_vector
+            .as_mut_slice()
+            .iter_mut()
+            .enumerate()
+            .for_each(|(i, e)| *e = &self[i] - &b[i]);
+        Ok(diff_vector)
+    }
+
     /// Compute sum of all elements of a vector
+    #[cfg(feature = "rayon")]
     pub fn sum(&self) -> FieldElement {
         self.as_slice()
             .par_iter()
@@ -881,8 +937,17 @@ impl FieldElementVector {
             .reduce(|| FieldElement::new(), |a, b| a + b)
     }
 
+    #[cfg(not(feature = "rayon"))]
+    pub fn sum(&self) -> FieldElement {
+        self.as_slice()
+            .iter()
+            .cloned()
+            .fold(FieldElement::new(), |a, b| a + b)
+    }
+
     /// Computes inner product of 2 vectors of field elements
     /// [a1, a2, a3, ...field elements].[b1, b2, b3, ...field elements] = (a1*b1 + a2*b2 + a3*b3) % curve_order
+    #[cfg(feature = "rayon")]
     pub fn inner_product(&self, b: &FieldElementVector) -> Result<FieldElement, ValueError> {
         check_vector_size_for_equality!(self, b)?;
         let r = (0..b.len())
@@ -892,9 +957,20 @@ impl FieldElementVector {
         Ok(r)
     }
 
+    #[cfg(not(feature = "rayon"))]
+    pub fn inner_product(&self, b: &FieldElementVector) -> Result<FieldElement, ValueError> {
+        check_vector_size_for_equality!(self, b)?;
+        let r = (0..b.len())
+            .into_iter()
+            .map(|i| (&self[i] * &b[i]))
+            .fold(FieldElement::new(), |a, b| a + b);
+        Ok(r)
+    }
+
     /// Calculates Hadamard product of 2 field element vectors.
     /// Hadamard product of `a` and `b` = `a` o `b` = (a0 o b0, a1 o b1, ...).
     /// Here `o` denotes multiply operation
+    #[cfg(feature = "rayon")]
     pub fn hadamard_product(
         &self,
         b: &FieldElementVector,
@@ -904,6 +980,21 @@ impl FieldElementVector {
         hadamard_product
             .as_mut_slice()
             .par_iter_mut()
+            .enumerate()
+            .for_each(|(i, e)| *e = &self[i] * &b[i]);
+        Ok(hadamard_product)
+    }
+
+    #[cfg(not(feature = "rayon"))]
+    pub fn hadamard_product(
+        &self,
+        b: &FieldElementVector,
+    ) -> Result<FieldElementVector, ValueError> {
+        check_vector_size_for_equality!(self, b)?;
+        let mut hadamard_product = Self::new(self.len());
+        hadamard_product
+            .as_mut_slice()
+            .iter_mut()
             .enumerate()
             .for_each(|(i, e)| *e = &self[i] * &b[i]);
         Ok(hadamard_product)

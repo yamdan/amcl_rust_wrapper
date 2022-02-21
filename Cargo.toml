@@ -13,11 +13,12 @@ exclude = [
 ]
 
 [features]
-default = ["bls381"]
+default = ["bls381", "rayon"]
 bls381 = []
 bn254 = []
 secp256k1 = []
 ed25519 = []
+wasm = ["rand/wasm-bindgen"]
 
 [dependencies]
 rand = "0.7"
@@ -29,11 +30,10 @@ serde_bytes = "0.11"
 zeroize = "1.1.0"
 #tiny-keccak = "1.5"
 sha3 = "0.8.2"
-rayon = "1.3"
+rayon = { version = "1.3", optional = true }
 subtle-encoding = "0.5.1"
 
 [dependencies.amcl]
 package = "miracl_core"
 version = "2.0.0"
 features = ["bls12381", "bn254", "secp256k1", "ed25519"]
-
