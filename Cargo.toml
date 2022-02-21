@@ -35,5 +35,5 @@ subtle-encoding = "0.5.1"
 
 [dependencies.amcl]
 package = "miracl_core"
-version = "2.0.0"
+version = "~2.0.0"
 features = ["bls12381", "bn254", "secp256k1", "ed25519"]
