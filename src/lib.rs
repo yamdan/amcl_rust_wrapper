@@ -1,21 +1,21 @@
 #[allow(non_snake_case)]
 #[allow(non_upper_case_globals)]
-pub extern crate amcl;
+pub extern crate miracl_core;
 
 #[macro_use]
 extern crate lazy_static;
 
 #[cfg(feature = "bn254")]
-pub use amcl::bn254 as ECCurve;
+pub use miracl_core::bn254 as ECCurve;
 
 #[cfg(feature = "bls381")]
-pub use amcl::bls12381 as ECCurve;
+pub use miracl_core::bls12381 as ECCurve;
 
 #[cfg(feature = "secp256k1")]
-pub use amcl::secp256k1 as ECCurve;
+pub use miracl_core::secp256k1 as ECCurve;
 
 #[cfg(feature = "ed25519")]
-pub use amcl::ed25519 as ECCurve;
+pub use miracl_core::ed25519 as ECCurve;
 
 #[macro_use]
 extern crate serde;

@@ -1,4 +1,4 @@
-use crate::amcl::hmac;
+use crate::miracl_core::hmac;
 use crate::constants::{
     CurveOrder, GroupG1_SIZE, CURVETYPE, G1_COMP_BYTE_SIZE, HASH_TYPE, MONTGOMERY,
 };

@@ -8,8 +8,8 @@ use crate::constants::{
     FieldElement_SIZE, FieldModulus, DNLEN,
 };
 use crate::types::{BigNum, DoubleBigNum, FP};
-use amcl::hmac;
-use amcl::rand::RAND;
+use miracl_core::hmac;
+use miracl_core::rand::RAND;
 
 use sha3::digest::{ExtendableOutput, Input, XofReader};
 use sha3::Shake256;

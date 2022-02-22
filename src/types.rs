@@ -1,4 +1,4 @@
-use super::amcl::arch::Chunk;
+use super::miracl_core::arch::Chunk;
 use super::ECCurve::big::BIG;
 use super::ECCurve::dbig::DBIG;
 use super::ECCurve::ecp::ECP;

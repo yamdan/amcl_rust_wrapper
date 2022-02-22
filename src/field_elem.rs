@@ -6,7 +6,7 @@ use crate::constants::{
 use crate::errors::{SerzDeserzError, ValueError};
 use crate::types::{BigNum, DoubleBigNum, Limb};
 use crate::utils::{barrett_reduction, get_seeded_RNG, get_seeded_RNG_with_rng, hash_msg};
-use amcl::rand::RAND;
+use miracl_core::rand::RAND;
 use core::fmt;
 use std::cmp::Ordering;
 use std::hash::{Hash, Hasher};

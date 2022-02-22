@@ -1,4 +1,4 @@
-use crate::amcl::hmac;
+use crate::miracl_core::hmac;
 use crate::constants::{CurveOrder, GroupG2_SIZE, G2_COMP_BYTE_SIZE, HASH_TYPE};
 use crate::errors::{SerzDeserzError, ValueError};
 use crate::field_elem::{FieldElement, FieldElementVector};
